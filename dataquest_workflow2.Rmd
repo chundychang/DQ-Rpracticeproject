@@ -17,7 +17,7 @@ output:
 
 # Introduction
 
-This is my solution to Dataquest's COVID-19 Guided Project from Course 4 (Specialized Data Processing in R: Strings and Dates), which evaluates new data related to the data from part 1 and answers the question of whether a book company's new program was successful at increasing sales and improving review quality. 
+This is my solution to Dataquest's Guided Project from Course 4 (Specialized Data Processing in R: Strings and Dates), which evaluates new data related to the data from part 1 and answers the question of whether a book company's new program was successful at increasing sales and improving review quality. 
 
 More details, such as descriptions for variables, can be found in the "ReadMe" file of this project's [repository in GitHub](https://github.com/chundychang/DQ-booksales-project).
 
