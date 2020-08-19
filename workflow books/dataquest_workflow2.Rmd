@@ -1,0 +1,172 @@
+---
+title: 'Dataquest Guided Project: Creating An Efficient Data Analysis Workflow (part
+  2)'
+author: "Cindy Zhang"
+date: "8/14/2020"
+output: 
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+  html_document:
+    code_folding: hide
+    number_sections: true
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+---
+
+# Introduction
+
+This is my solution to Dataquest's Guided Project from Course 4 (Specialized Data Processing in R: Strings and Dates), which evaluates new data related to the data from part 1 and answers the question of whether a book company's new program was successful at increasing sales and improving review quality. 
+
+More details, such as descriptions for variables, can be found in the "ReadMe" file of this project's [repository in GitHub](https://github.com/chundychang/DQ-booksales-project).
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = F, results = 'markup', message = F)
+# knitr::opts_chunk$set(include = F)
+# knitr::opts_chunk$set(echo = TRUE)
+options(scientific=T, digits = 3) 
+# options(scipen=9, digits = 3) 
+# ‘scipen’: integer. A penalty to be applied when deciding to print numeric values in fixed or exponential notation.  Positive values bias towards fixed and negative towards scientific notation: fixed notation will be preferred unless it is more than ‘scipen’ digits wider.
+# use scipen=999 to prevent scientific notation at all times
+```
+
+```{r pkg, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(purrr)
+library(readr)
+library(tidyverse)
+library(tibble)
+library(DT)
+library(stringr)
+library(lubridate)
+options(stringsAsFactors = FALSE)
+```
+
+# Findings
+
+## Step 1: Data Exploration
+
+I loaded the data as a data frame and examined its dimensions, column titles, and column types:
+
+```{r step1_data}
+booksales_df <- data.frame(read.csv("sales2019.csv"))
+dim(booksales_df)
+colnames(booksales_df)
+for (i in colnames(booksales_df)) {
+  print(class(booksales_df[[i]]))
+}
+```
+There are `r nrow(booksales_df)` rows and `r ncol(booksales_df)` columns in the dataframe. Each of the columns in `booksales_df` seems to represent one entry per unique customer that purchased books from the company. I ran a for loop to display which columns had NA values and how many:
+
+```{r step1_na}
+for (i in colnames(booksales_df))
+  print(sum(is.na(booksales_df[[i]])))
+```
+
+The results show that the `user_submitted review` and `total_purchased` columns each contain `r sum(is.na(booksales_df$user_submitted_review))` and `r sum(is.na(booksales_df$total_purchased))` NA values, respectively. 
+
+## Step 2: Handling Missing Data
+
+I handled the NA values for each column differently. First, I created a new dataframe that filters out the NA values from the `review` column:
+
+```{r step2_reviewNA}
+booksales_df_filter <- booksales_df %>%
+  filter(!(is.na(user_submitted_review)))
+```
+
+Filtering out NA values removed `r nrow(booksales_df)-nrow(booksales_df_filter)` observations from the dataset, which is about `r ((nrow(booksales_df)-nrow(booksales_df_filter))/(nrow(booksales_df)))*100` percent of the original dataset removed. This may have an impact on calculations performed later in this project.
+
+Since the focus of this project is to determine the program's effect on sales, I created a new column within `booksales_df_filter` that filled in missing values from the `total_purchased` column with the average of total number of books purchased in the dataset, which will serve as an estimate stand-in for the missing values.
+
+```{r step2_purchaseNA}
+booksales_df_filter <- booksales_df_filter %>%
+  mutate(total_purchased_fill = ifelse(is.na(total_purchased) == TRUE, mean(total_purchased, na.rm=TRUE), total_purchased))
+booksales_df_filter$total_purchased=NULL
+```
+
+## Step 3: Processing Review Data
+
+To analyze the text data in the `user_submitted_review` column, I first examined what the unique values in the column are:
+
+```{r step3_unique}
+print(unique(booksales_df_filter$user_submitted_review))
+```
+The print results above show a range of positive to negative reviews. I wrote a binary function that detects whether reviews include positive language (e.g., Awesome or okay) and prints the result "Positive" or "Not positive."
+
+```{r step3_function}
+positive_review <- function(x) {
+ string_pos <- str_detect(x, "okay|OK|Awesome|I learned a lot|Never read a better book")
+  is_positive <- case_when(
+    string_pos == TRUE ~ "Positive",
+    string_pos == FALSE ~ "Not positive"
+ )
+}
+```
+
+I then applied the `positive_review` function to the `user_submitted_review` column and created a new column that prints whether a review is positive or not positive:
+
+```{r step3_mutate}
+booksales_df_filter <- booksales_df_filter %>%
+  mutate(is_positive_review = positive_review(booksales_df_filter$user_submitted_review)
+  )
+head(booksales_df_filter)
+```
+
+## Step 4: Comparing Book Sales Between Pre- and Post-Program Sales
+
+Some last data cleaning steps are required before performing any kind of analysis on this data. First, the `date` column was listed as a character/string type variable back in Step 1. For this analysis, the dates need to be converted into quantitative values using the `lubridate` package. Second, to answer the question of whether the program worked, I created a new column that notes whether a purchase was made before or after July 1, 2019, the first day of the sales/review improvement program. Finally, I extracted a summary table from the data that lists the total sum of books purchased before and after July 1, 2019.
+
+```{r step4_lubridate, results='hide'}
+mdy(booksales_df_filter$date)
+```
+
+```{r step4_mutate}
+booksales_df_filter <- booksales_df_filter %>%
+  mutate(before_after = if_else(booksales_df_filter$date<2019-07-01, "Before", "After"))
+booksales_sum_table <- booksales_df_filter %>%
+  group_by(before_after) %>%
+  summarize(
+    purchase_sum = sum(total_purchased_fill)
+  )
+booksales_sum_table
+```
+
+Based on the table above, total book purchases increased after July 1, 2019 by `r round(booksales_sum_table[1,2]-booksales_sum_table[2,2], 0)`.
+
+## Step 5: Comparing Book Sales Within Customer Type
+
+I repeated the code creating a summary table in Step 4 but included `customer_type` as a grouping variable:
+
+```{r step5}
+booksales_sum_table_sub <- booksales_df_filter %>%
+  group_by(before_after, customer_type) %>%
+  summarize(
+    purchase_sum = sum(total_purchased_fill)
+  )
+booksales_sum_table_sub
+```
+
+Based on the table above, total book purchases by businesses increased by `r round(booksales_sum_table_sub[1,3]-booksales_sum_table_sub[3,3], 0)` while total book purchases by individuals increased by `r round(booksales_sum_table_sub[2,3]-booksales_sum_table_sub[4,3], 0)`.
+
+## Step 6: Comparing Review Sentiment Between Pre- and Post-Program Sales
+
+I created another summary table, this time measuring the total of positive reviews before and after July 1, 2019:
+
+```{r step6}
+bookreviews_sum_table <- booksales_df_filter %>%
+  group_by(before_after) %>%
+  summarize(
+    pos_review_sum = sum(is_positive_review == "Positive")
+  )
+bookreviews_sum_table
+```
+
+Based on the table above, positive reviews increased by `r round(bookreviews_sum_table[1,2]-bookreviews_sum_table[2,2],0)`, suggesting that review sentiment improved after the program was created.
+
+# Conclusion
+
+The improvement program appears to have worked as both total purchases (in total and at the customer level among businesses and individuals) and positive reviews increased after the program was implemented on July 1, 2019. However, anyone familiar with statistics knows that any number of confounding factors not represented in the data or even hidden in the data can introduce bias that renders the findings inaccurate. For a more accurate answer as to whether this program improved sales, I would conduct a regression analysis on a more comprehensive dataset.
+
+Thanks to everyone who's been reading so far and stay tuned for more projects!
