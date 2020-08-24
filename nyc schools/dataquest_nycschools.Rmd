@@ -21,7 +21,7 @@ This is my solution to Dataquest's Guided Project from the first Data Cleaning i
 1. Do student, teacher, and parent perceptions of NYC school quality appear to be related to demographic and academic success metrics?
 2. Do students, teachers, and parents have similar perceptions of NYC school quality? 
 
-More details such as the RMD and csv files can be found in the [repository in GitHub](https://github.com/chundychang/DQ-Rpracticeproject). Details about the variables can be found [here](https://data.cityofnewyork.us/Education/2011-NYC-School-Survey/mnz3-dyi8).
+More details such as the RMD and csv files can be found in the [repository in GitHub](https://github.com/chundychang/DQ-Rpracticeproject/tree/master/nyc%20schools). Details about the variables can be found [here](https://data.cityofnewyork.us/Education/2011-NYC-School-Survey/mnz3-dyi8).
 
 
 ```{r setup, include=FALSE}
@@ -50,22 +50,41 @@ options(stringsAsFactors = FALSE)
 
 # Findings
 
-## Step 1: 
+## Step 1: Loading the Dataframes
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+```{r load}
+combined <- data.frame(read_csv("combined.csv"))
+gened <- data.frame(read_tsv("masterfile11_gened_final.txt"))
+d75 <- data.frame(read_tsv("masterfile11_d75_final.txt"))
 ```
 
-## Including Plots
+## Step 2: Simplifying the Dataframes
 
-You can also embed plots, for example:
+dbn, high school, location, enrollment, borough, columns 14-32
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r simplify, echo=FALSE}
+gened_simp <- gened %>%
+  select(dbn, bn, studentssurveyed, schoolname, highschool, 14:32) %>%
+  filter(is.na(highschool))
+
+d75_simp <- d75 %>%
+  select(dbn, bn, studentssurveyed, schoolname, highschool, 14:32) %>%
+  filter(is.na(highschool))
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+## Step 3: Creating a Single Dataframe for Analysis
+
+```{r combine}
+surveys <- bind_rows(gened, d75)
+combined_surv <- combined %>%
+  rename(dbn = DBN) %>%
+  left_join(surveys, by = "dbn")
+```
+
+## Step 4: Looking for Interesting Correlations and Examining Relationships Using Scatter Plots
+
+```{r cor}
+
+```
+
+## Step 5: Reshaping the Data Based on Differences in Student,Parent, and Teacher Perceptions
