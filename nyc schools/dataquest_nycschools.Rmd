@@ -92,16 +92,15 @@ cor_tib <- cor_mat %>%
   as_tibble(rownames = "variable")
 ```
 
-```{r corrank}
+```{r corselect}
 cor_select <- cor_tib %>%
   select(1:55) %>%
   slice(39:54)
 
 cor_func <- function(x,y) {
   cor_select %>% 
-    select(x, y) %>%
-    filter(y > 0.25 | y < -0.25) %>%
-    arrange(desc(y), .by_group=TRUE)
+    dplyr::select(x, y) %>%
+    dplyr::arrange(desc(y))
 }
 ```
 
