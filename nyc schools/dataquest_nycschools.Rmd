@@ -21,13 +21,13 @@ This is my solution to Dataquest's Guided Project from the first Data Cleaning i
 1. Do student, teacher, and parent perceptions of NYC school quality appear to be related to demographic and academic success metrics?
 2. Do students, teachers, and parents have similar perceptions of NYC school quality? 
 
-More details such as the RMD and csv files can be found in the [repository in GitHub](https://github.com/chundychang/DQ-Rpracticeproject/tree/master/nyc%20schools). Details about the variables can be found [here](https://data.cityofnewyork.us/Education/2011-NYC-School-Survey/mnz3-dyi8).
+More details such as the RMD and csv files can be found in the [repository in GitHub](https://github.com/chundychang/DQ-Rpracticeproject/tree/master/nyc%20schools). More details about the survey response variables can be found [here](https://data.cityofnewyork.us/Education/2011-NYC-School-Survey/mnz3-dyi8).
 
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(warning = F, results = 'markup', message = F)
 # knitr::opts_chunk$set(include = F)
-# knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE)
 options(scientific=T, digits = 3) 
 # options(scipen=9, digits = 3) 
 # ‘scipen’: integer. A penalty to be applied when deciding to print numeric values in fixed or exponential notation.  Positive values bias towards fixed and negative towards scientific notation: fixed notation will be preferred unless it is more than ‘scipen’ digits wider.
@@ -35,15 +35,19 @@ options(scientific=T, digits = 3)
 ```
 
 ```{r pkg, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(pander)
+library(flextable)
+library(magrittr)
 library(dplyr)
 library(purrr)
 library(readr)
 library(tidyverse)
+library(tidyr)
 library(tibble)
+library(rlang)
 library(DT)
 library(stringr)
-library(lubridate)
 library(ggplot2)
 options(stringsAsFactors = FALSE)
 ```
@@ -52,15 +56,19 @@ options(stringsAsFactors = FALSE)
 
 ## Step 1: Loading the Dataframes
 
+I loaded the combined NYC school characteristics dataset supplied by Dataquest and text files containing the raw results from the 2011 NYC School Survey. 
+
 ```{r load}
 combined <- data.frame(read_csv("combined.csv"))
 gened <- data.frame(read_tsv("masterfile11_gened_final.txt"))
 d75 <- data.frame(read_tsv("masterfile11_d75_final.txt"))
 ```
 
+`gened` contains the survey results for general education schools while `d75` contains survey results for District 75 schools, which provide special education support for children with special needs such as learning or physical disabilities. 
+
 ## Step 2: Simplifying the Dataframes
 
-dbn, high school, location, enrollment, borough, columns 14-32
+The survey dataframes need to be pared down- there are `r ncol(gened)` rows in the `gened` dataframe and `r ncol(d75)` in the `d75` dataframe. I am only interested in the following variables: `dbn` (I will be using this as a key to combine all the dataframes together), the columns containing aggregate scores for each survey group, and some additional characteristics like high school name, location, enrollment size, borough. I did not use all of these columns for this analysis, but including them lets me keep them around for future analysis of this dataset. `highschool` in particular was useful to filter out survey results from schools that do not service high school-age students (for the purposes of this analysis, I only focused on high school students).
 
 ```{r simplify, echo=FALSE}
 gened_simp <- gened %>%
@@ -74,14 +82,19 @@ d75_simp <- d75 %>%
 
 ## Step 3: Creating a Single Dataframe for Analysis
 
+To create a single dataframe, I first combined the two survey dataframes together. I then combined the singular survey results dataframe with the `combined` dataframe using a left join.
+
 ```{r combine}
 surveys <- bind_rows(gened, d75)
 combined_surv <- combined %>%
   rename(dbn = DBN) %>%
-  left_join(surveys, by = "dbn")
+  left_join(surveys, by = "dbn") %>%
+  select(1:61)
 ```
 
-## Step 4: Looking for Interesting Correlations and Examining Relationships Using Scatter Plots
+## Step 4: Looking for Interesting Correlations
+
+To answer the first question about the relationship between survey responses and academic/demographic metrics, I created a correlation matrix, which calculates a value from -1 to 1 of how correlated a pair of variables are. Quick statistics refresher: the closer to -1 (negative) or 1 (positive), the stronger the correlation. From the matrix, I extracted a tibble, that assigns the variable names to the first column of the tibble. 
 
 ```{r cor}
 cor_mat <- combined_surv %>%
@@ -92,26 +105,147 @@ cor_tib <- cor_mat %>%
   as_tibble(rownames = "variable")
 ```
 
+Next, I created a more selective tibble based on the variables I was interested in investigating- I filtered for academic/demographics in the columns and survey responses in the rows. 
+
 ```{r corselect}
 cor_select <- cor_tib %>%
   select(1:55) %>%
   slice(39:54)
+```
 
-cor_func <- function(x,y) {
-  cor_select %>% 
-    dplyr::select(x, y) %>%
-    dplyr::arrange(desc(y))
+Finally, I wrote a function that would match the variable names to each correlation coefficient and sorting the coefficients in descending order, largest to smallest value. 
+
+```{r corrank}
+cor_func <- function(data, x, y) {
+  data %>%
+    dplyr::select(x,y) %>%
+    dplyr::arrange(desc(!!sym(y)))
 }
-```
 
-```{r corrank1}
 x_var <- names(cor_select)[1]
-y_var <- names(cor_select)[c(6, 11, 13:26)]
+y_var <- names(cor_select)[c(6, 11:13, 15:16, 18:23, 25:26)]
 
-cor_rank <- map2(x_var, y_var, cor_func)
+cor_rank <- map(y_var, cor_func, data = cor_select, x = x_var)
 ```
 
-```{r scatter}
+In the following sub-sub sections, I identify academic/demographic variables that had correlation coefficients greater than 0.25, which suggests a relationship with survey responses. I've included the definitions for each part of the survey response variable below for ease of understanding:
+
+* Survey topics:
+  + saf = Safety and Respect Aggregate Score
+  + aca = Academic Expectations Score
+  + eng = Engagement Score
+  + com = Communication Score
+* Survey audience:
+  + _t = Teachers
+  + _s = Students
+  + _p = Parents
+  + _tot = total score from all survey audiences
+  
+Each survey response variable is formatted as: "[survey topic]_[survey audience]_[survey year]" (e.g., aca_t_11 refers to the 2011 Academic Engagement Score among teachers).
+
+### Average SAT Score: Positive Correlations
+
+```{r cor1, results = 'asis'}
+avg_sat_score <- as.data.frame(cor_rank[1])
+pandoc.table(avg_sat_score, style = "rmarkdown", emphasize.strong.cells=which(avg_sat_score[2] > 0.25, arr.ind=TRUE))
 ```
+Average SAT score has the highest positive correlation with Safety and Respect aggregate scores from teachers, suggesting that the higher the SAT score, the higher the Safety and Respect score from teachers. Other survey response variables with positive correlations with average SAT score include Academic Expectations score from students, Safety and Respect score from all audiences, and Safety and Respect score from students.
+
+### Percentage of High AP Scores: Strong Positive Correlations
+
+```{r cor2, results = 'asis'}
+high_score_percent <- as.data.frame(cor_rank[2])
+pandoc.table(high_score_percent, style = "rmarkdown", emphasize.strong.cells=which(high_score_percent[2] > 0.25, arr.ind=TRUE))
+```
+Percentage of high AP scores (among students who took AP exams) is very strongly correlated with Safety and Respect scores from all audiences, individually and as a whole. This academic variable is strongly correlated with other student survey responses, which corresponds with the trend that students that score highly on AP exams likely attend prestigious high schools that achieve high survey scores from students. `high_score_percent` also has a strong positive correlation with the total Academic Expectation score from all audiences, again reinforcing the trend that prestigious high schools in NYC have high survey scores.
+
+### Average Class Size: Negative Correlations
+
+```{r cor3, results = 'asis'}
+avg_class_size <- as.data.frame(cor_rank[3])
+pandoc.table(avg_class_size, style = "rmarkdown", emphasize.strong.cells=which(avg_class_size[2] < -0.25, arr.ind=TRUE))
+```
+
+Average class size is negatively correlated with several survey response variables among parents and students, most strongly with Communication scores. This corresponds with the idea that smaller class sizes allow for more effective teaching and communication; thus, high schools with smaller average class sizes scored higher among parents and students while schools with larger average class sizes scored lower. 
+
+### Percentage of Special Ed Students: Strong Negative Correlations
+
+```{r cor4, results = 'asis'}
+sped_percent <- as.data.frame(cor_rank[6])
+pandoc.table(sped_percent, style = "rmarkdown", emphasize.strong.cells=which(sped_percent[2] < -0.25, arr.ind=TRUE))
+```
+Percentage of Special Ed students has a strong negative correlation with several survey response variables among parents and students. In other words, schools with high percentages of special ed students tended to score lower on all survey topics, especially among students. 
+
+### Percentage of Asian Students: Positive Correlations
+
+```{r cor5, results = 'asis'}
+asian_percent <- as.data.frame(cor_rank[7])
+pandoc.table(asian_percent, style = "rmarkdown", emphasize.strong.cells=which(asian_percent[2] > 0.25, arr.ind=TRUE))
+```
+
+Percentage of Asian students is positively correlated with Safety and Respect scores among students and teachers, suggesting schools with higher percentages of Asian students scored higher on Safety and Respect.
+
+### Percentage of Black Students: Strong Negative Correlations
+
+```{r cor6, results = 'asis'}
+black_percent <- as.data.frame(cor_rank[8])
+pandoc.table(black_percent, style = "rmarkdown", emphasize.strong.cells=which(black_percent[2] < -0.25, arr.ind=TRUE))
+```
+
+In sharp contrast to the previous sub-sub section, Percentage of Black students has a strong negative correlation with Safety and Respect scores among all audiences. These strong negative correlation suggest that schools with a high percentage of black students score lower on Safety and Respect, which corresponds with trends of school gentrification along racial divides in NYC. 
+
+### Variables with Weak Correlations
+
+The following demographic variables had weak correlations (correlation coefficient scores between -0.25 and 0.25) with survey response variables: `frl_percent` (percent of students that are on free/reduced lunch), `ell_percent` (percent of students that are English language learners), percentage of Hispanic students, percentages of male and female students, graduation percentages, and dropout percentages. These demographic variables have a weak relationship with survey response variables and likely do not influence student, teacher, and parent perceptions of NYC schools. 
 
 ## Step 5: Reshaping the Data Based on Differences in Student,Parent, and Teacher Perceptions
+
+To answer the second question about the similarity between student, teacher, and parent perceptions of NYC schools, I used `pivot_longer` to reshape the data so that the survey response variable and the corresponding scores each have their own column:
+
+```{r reshape}
+combined_surv_long <- combined_surv %>%
+  pivot_longer(cols = c(46:57), 
+               names_to = "response_type",
+               values_to = "response_score")
+```
+
+I added two new variables that designates each survey response according to the audience (e.g., student) and topic (e.g., Safety and Respect) in the original response variable formatting.
+
+```{r new_var}
+combined_surv_add <- combined_surv_long %>%
+  mutate(survey_initial = str_sub(response_type, 4,6)) %>%
+  mutate(survey_group = ifelse(survey_initial == "_p_", "parent", ifelse(survey_initial == "_t_", "teacher", ifelse(survey_initial == "_s_", "student", "NA"))))%>%
+  mutate(topic_initial = str_sub(response_type, 1,3)) %>%
+  mutate(survey_topic = ifelse(topic_initial == "saf", "Safety and Respect", ifelse(topic_initial == "com", "Communication", ifelse(topic_initial == "eng", "Engagement", ifelse(topic_initial == "aca", "Academic Expectations", "NA")))))
+```
+
+Finally, I created box plots measuring each survey audience's scores for each of the four topics.
+
+```{r graphs}
+ggplot(data=combined_surv_add) +
+  aes(x=survey_group, y=response_score)+
+  geom_boxplot()+
+  facet_wrap(~survey_topic, nrow=2)+
+  theme(panel.background=element_rect(fill="white"))
+```
+Based on the boxplots: 
+
+* *Academic Expectations*: the range of scores among parents and students is similar, but there are more low outlier scores among teachers (also a larger distribution of scores).
+* *Communication*: parents gave higher scores than students and teachers and have a somewhat even distribution across the quartiles and outliers, suggesting a favorable perception of communication among parents. Distribution of survey scores among students is smaller and the quartile scores are lower than parents and teachers, but there are more high score outliers. Distribution of survey scores is the largest among teachers and has more low score outliers. 
+* *Engagement*: similar trends as with communication; parents have overall favorable perceptions of engagement, students less favorable, and teachers more varied.
+* *Safety and Respect*: while distribution of scores was higher among parents, there are more low outlier scores. Student score distribution is lower but has more high score outliers, while the opposite was the case for teachers. 
+
+# Conclusion
+
+Certain academic and demographic variables are strongly correlated with student, teacher, and parent perceptions of NYC schools. These correlations correspond with widely-observed trends, including but not limited to:
+* Perceptions of a lack of safety and respect among schools with high percentages of black students and special ed students.
+* Perceptions of ineffective communication among schools with large average class sizes.
+* Perceptions of strong academic expectations and safety and respect among schools with high average SAT scores and high percentages of students with high AP scores.
+
+There are also noticeable differences in perceptions between students, parents, and teachers. Parents have overall favorable views on all four topics while students have less favorable views, especially in regards to communication. Teachers have the largest range of perceptions on all four topics and any outlier scores tend to be lower.
+
+Despite the work done to inspect and clean the data for this analysis, there are some important caveats to consider. There is probably a survey response bias in the dataset- prestigious, well-funded schools likely have a greater response rate than underserved schools. Student and parent survey responses should also be scrutinized further, as the pattern of small score distribution among all four topics is a little suspect. 
+
+I plan to revisit this dataset in the future to see if more nuanced insights can be gleaned.
+
+Thanks to everyone who's been reading so far and stay tuned for more projects!
