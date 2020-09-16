@@ -31,6 +31,8 @@ options(scientific=T, digits = 3)
 
 ```{r pkg, include=FALSE}
 library(knitr)
+library(RSQLite)
+library(DBI)
 library(pander)
 library(flextable)
 library(magrittr)
@@ -47,12 +49,71 @@ library(ggplot2)
 options(stringsAsFactors = FALSE)
 ```
 
-## Including Plots
+# Findings
 
-You can also embed plots, for example:
+## Step 1: Creating Helper Functions
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r helper}
+run_query <- function(q) {
+  conn <- dbConnect(SQLite(), 'chinook.db')
+  result <- dbGetQuery(conn, q)
+  dbDisconnect(conn)
+  return(result)
+}
+show_tables <- function() {
+  q = "SELECT name, type FROM sqlite_master WHERE type IN ('table', 'view')"
+  return(run_query(q))
+}
+show_tables()
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+## Step 2: Selecting Albums to Purchase
+
+query: finds out which genres sell the most tracks in the USA; in absolute numbers and in percentages
+
+```{r query}
+album_query <- '
+WITH usa_tracks_sold AS
+   (
+    SELECT il.* FROM invoice_line il
+    INNER JOIN invoice i on il.invoice_id = i.invoice_id
+    INNER JOIN customer c on i.customer_id = c.customer_id
+    WHERE c.country = "USA"
+   )
+SELECT
+    g.name genre,
+    count(uts.invoice_line_id) tracks_sold,
+    cast(count(uts.invoice_line_id) AS FLOAT) / (
+        SELECT COUNT(*) from usa_tracks_sold
+    ) percentage_sold
+FROM usa_tracks_sold uts
+INNER JOIN track t on t.track_id = uts.track_id
+INNER JOIN genre g on g.genre_id = t.genre_id
+GROUP BY 1
+ORDER BY 2 DESC
+LIMIT 10;
+'
+
+album_df <- data.frame(run_query(album_query))
+```
+
+```{r graph}
+ggplot(data=album_df)+
+  aes(x=genre, y=tracks_sold)+
+  geom_bar(stat="identity")+
+  geom_text(aes(label=tracks_sold), position=position_dodge(width=0.9), vjust=-0.25) +
+  labs(title="Top 10 Best-Selling Genres by Total Album Sales")+
+  theme(panel.background=element_rect(fill="white"), axis.line = element_line(size=0.25, colour = "black"))
+```
+
+Based on above results, Red Tone, Slim Jim Bites, and Meteor and the Girls
+
+## Step 3: Analyzing Employee Sales Performance
+
+## Step 4: Analyzing Sales by Country
+
+## Step 5: Visualizing Sales by Country
+
+## Step 6: Album vs. Individual Tracks
+
+# Conclusion
