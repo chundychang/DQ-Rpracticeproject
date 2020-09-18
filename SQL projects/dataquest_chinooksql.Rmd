@@ -31,6 +31,7 @@ options(scientific=T, digits = 3)
 
 ```{r pkg, include=FALSE}
 library(knitr)
+library(forcats)
 library(RSQLite)
 library(DBI)
 library(pander)
@@ -71,7 +72,7 @@ show_tables()
 
 query: finds out which genres sell the most tracks in the USA; in absolute numbers and in percentages
 
-```{r query}
+```{r query1}
 album_query <- '
 WITH usa_tracks_sold AS
    (
@@ -82,8 +83,8 @@ WITH usa_tracks_sold AS
    )
 SELECT
     g.name genre,
-    count(uts.invoice_line_id) tracks_sold,
-    cast(count(uts.invoice_line_id) AS FLOAT) / (
+    COUNT(uts.invoice_line_id) tracks_sold,
+    CAST(COUNT(uts.invoice_line_id) AS FLOAT) / (
         SELECT COUNT(*) from usa_tracks_sold
     ) percentage_sold
 FROM usa_tracks_sold uts
@@ -93,26 +94,144 @@ GROUP BY 1
 ORDER BY 2 DESC
 LIMIT 10;
 '
-
 album_df <- data.frame(run_query(album_query))
-```
 
-```{r graph}
 ggplot(data=album_df)+
-  aes(x=genre, y=tracks_sold)+
+  aes(x=reorder(genre,-tracks_sold), y=tracks_sold)+
   geom_bar(stat="identity")+
   geom_text(aes(label=tracks_sold), position=position_dodge(width=0.9), vjust=-0.25) +
-  labs(title="Top 10 Best-Selling Genres by Total Album Sales")+
-  theme(panel.background=element_rect(fill="white"), axis.line = element_line(size=0.25, colour = "black"))
+  labs(y="Total Tracks Sold", x="Genre", title="Top 10 Best-Selling Genres by Total Track Sales")+
+  theme(panel.background=element_rect(fill="white"), axis.line = element_line(size=0.25, colour = "black"), axis.text.x=element_text(size=8), plot.title = element_text(hjust=0.5))
 ```
 
 Based on above results, Red Tone, Slim Jim Bites, and Meteor and the Girls
 
 ## Step 3: Analyzing Employee Sales Performance
 
+Is any sales support agent performing better/worse? INCLUDE: supervisor employee reports to, country, hire date
+
+Finds total dollar amount of sales assigned to each sales support agent; add any extra attributes that are relevant
+
+```{r query2}
+employee_query <- '
+WITH employee_supervisor AS
+  (
+  SELECT
+    e1.first_name || " " || e1.last_name employee_name, 
+    e1.title employee_title,
+    e2.first_name || " " || e2.last_name supervisor_name,
+    e2.title supervisor_title,
+    e1.city,
+    e1.state,
+    e1.country,
+    e1.birthdate,
+    e1.hire_date,
+    e1.employee_id
+  FROM employee e1
+  LEFT JOIN employee e2 ON e1.reports_to = e2.employee_id
+  ORDER BY 1
+  )
+SELECT
+  es.employee_name,
+  es.employee_title,
+  es.supervisor_name,
+  es.supervisor_title,
+  es.city,
+  es.state,
+  es.country,
+  es.birthdate,
+  es.hire_date,
+  SUM(i.total) total_sales,
+  COUNT(i.invoice_id) total_invoices,
+  COUNT(DISTINCT(c.customer_id)) total_customers,
+  AVG(i.total) avg_sales
+FROM employee_supervisor es
+LEFT JOIN customer c on c.support_rep_id = es.employee_id
+LEFT JOIN invoice i on i.customer_id = c.customer_id
+WHERE es.employee_title = "Sales Support Agent"
+GROUP BY 1
+ORDER BY 10 DESC;
+'
+employee_df <- data.frame(run_query(employee_query))
+
+ggplot(data=employee_df)+
+  aes(x=reorder(employee_name,-total_sales), y=total_sales)+
+  geom_bar(stat="identity")+
+  geom_text(aes(label=total_sales), position=position_dodge(width=0.9), vjust=-0.25) +
+  labs(y="Total Sales", x="Employee Name", title="Total Sales by Sales Support Agent")+
+  theme(panel.background=element_rect(fill="white"), axis.line = element_line(size=0.25, colour = "black"), axis.text.x=element_text(size=8), plot.title = element_text(hjust=0.5))
+```
+Jane's lead can be attributed to her earlier start date compared to Margaret & Steve. 
+
+(table with query result)
+
+how many customers each sales support agent has, average total spent per customer per sales agent, customer who spent the most per sales agent
+
 ## Step 4: Analyzing Sales by Country
 
+```{r query3}
+country_sales_query <- '
+WITH country_or_other AS
+    (
+     SELECT
+       CASE
+           WHEN (
+                 SELECT count(*)
+                 FROM customer
+                 where country = c.country
+                ) = 1 THEN "Other"
+           ELSE c.country
+       END AS country,
+       c.customer_id,
+       il.*
+     FROM invoice_line il
+     INNER JOIN invoice i ON i.invoice_id = il.invoice_id
+     INNER JOIN customer c ON c.customer_id = i.customer_id
+    )
+SELECT
+    country,
+    customers,
+    total_sales,
+    average_order,
+    customer_lifetime_value
+FROM
+    (
+    SELECT
+        country,
+        count(distinct customer_id) customers,
+        SUM(unit_price) total_sales,
+        SUM(unit_price) / count(distinct customer_id) customer_lifetime_value,
+        SUM(unit_price) / count(distinct invoice_id) average_order,
+        CASE
+            WHEN country = "Other" THEN 1
+            ELSE 0
+        END AS sort
+    FROM country_or_other
+    GROUP BY country
+    ORDER BY sort ASC, total_sales DESC
+    );
+'
+country_sales_df <- data.frame(run_query(country_sales_query))
+```
+
+Total number of customers, total value of sales, avg sales per customer, avg order value; all for each country
+
 ## Step 5: Visualizing Sales by Country
+
+```{r visualization}
+create_bar <- function(x,y){
+  mutate(x= fct)
+  ggplot(data=country_sales_df) +
+    aes_string(x=x, y=y) +
+    geom_bar(stat="identity")+
+    theme(panel.background=element_rect(fill="white"))
+}
+
+x_countries <- names(country_sales_df)[1]
+y_var <- names(country_sales_df)[2:5]
+
+map2(x_countries, y_var, create_bar)
+```
 
 ## Step 6: Album vs. Individual Tracks
 
