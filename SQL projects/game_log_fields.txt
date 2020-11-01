@@ -59,33 +59,33 @@ Field(s)  Meaning
              doubles
              triples
              homeruns
-             RBI
+             RBI = run batted in; batter makes a play that allows a run to be scored
              sacrifice hits.  This may include sacrifice flies for years
-                prior to 1954 when sacrifice flies were allowed.
-             sacrifice flies (since 1954)
-             hit-by-pitch
-             walks
-             intentional walks
+                prior to 1954 when sacrifice flies were allowed = sacrifice bunt = bunting the ball so runner on base can advance
+             sacrifice flies (since 1954) = deliberate hit into outfield/foul territory so another player can score
+             hit-by-pitch = anything other than bat is struck by pitch direclty --> first base award
+             walks = base on balls = four pitches called balls --> awarded first base
+             intentional walks = deliberate ball so batter can't swing at pitched ball
              strikeouts
              stolen bases
              caught stealing
-             grounded into double plays
+             grounded into double plays = two outs during a play
              awarded first on catcher's interference
-             left on base
+             left on base = how may players left on base when out is called
 39-43     Visiting team pitching statistics (unquoted)(in order):
              pitchers used ( 1 means it was a complete game )
-             individual earned runs
+             individual earned runs = run enabled in the face of competent play
              team earned runs
-             wild pitches
-             balks
+             wild pitches = charge when pitch is too high, short, or wide for catcher to control with ordinary effort
+             balks = illegal pitcher act; pretending to pitch when he has no intention of doing so
 44-49     Visiting team defensive statistics (unquoted) (in order):
              putouts.  Note: prior to 1931, this may not equal 3 times
                 the number of innings pitched.  Prior to that, no
                 putout was awarded when a runner was declared out for
-                being hit by a batted ball.
-             assists
-             errors
-             passed balls
+                being hit by a batted ball. = recording an out
+             assists = every defensive player who fields or touches ball after hit by batter prior to recording of a putout, even if contact was unintentional
+             errors = fielder misplaying a ball in a manner that allows a batter or baserunner to advance one or more bases or allows a plate apperance to continue
+             passed balls = catcher charged with this when he fails to hold or control a legally pitched ball 
              double plays
              triple plays
 50-66     Home team offensive statistics
