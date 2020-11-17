@@ -2,9 +2,6 @@
 title: 'Dataquest Guided Project: Investigating Fandango Movie Ratings'
 author: "Cindy Zhang"
 date: "11/1/2020"
-output: html_document
----
-
 output: 
   pdf_document:
     toc: yes
@@ -21,7 +18,7 @@ output:
 
 This is my solution to Dataquest's Guided Project from the first Probability and Statistics course, which investigates whether Fandango's rating system has changed after Walter Hickey's analysis.
 
-More details such as the RMD and csv files can be found in the [repository in GitHub](https://github.com/chundychang/DQ-Rpracticeproject/tree/master/nyc%20schools). More details about the survey response variables can be found [here](https://data.cityofnewyork.us/Education/2011-NYC-School-Survey/mnz3-dyi8).
+More details such as the RMD and csv files can be found in the [repository in GitHub](https://github.com/chundychang/DQ-Rpracticeproject/tree/master/probability_statistics). More details about the survey response variables can be found [here](https://github.com/fivethirtyeight/data/blob/master/fandango/README.md) for 2014-15 and here (https://github.com/mircealex/Movie_ratings_2016_17/blob/master/README.md) for 2016-17.
 
 
 ```{r setup, include=FALSE}
@@ -52,22 +49,144 @@ library(ggplot2)
 options(stringsAsFactors = FALSE)
 ```
 
-## R Markdown
+# Findings
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+## Step 1: Understanding the Data
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+First step as always is loading the data into R; in this project, there were two separate csv files for movies released in 2014 & 2015 and 2016 & 2017, respectively. I then made two new dataframes that isolated the columns of relevant variables.
 
-```{r cars}
-summary(cars)
+```{r download}
+fandango_score_before <- data.frame(read_csv("fandango_prior.csv"))
+fandango_score_after <- data.frame(read_csv("fandango_after.csv"))
 ```
 
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r slice}
+fandango_score_before_slice <- fandango_score_before %>%
+  select(FILM, Fandango_Stars, Fandango_Ratingvalue, Fandango_votes, Fandango_Difference)
+fandango_score_after_slice <- fandango_score_after %>%
+  select(movie, year, fandango)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+Since the goal of this project is to determine whether there has been any change in Fandango's rating system after Hickey's original analysis, the population of interest would be all movies released between 2014 and 2017.
+
+The README.md files describe the sample selection process for each dataset as follows: 
+
+* [2014-2015](https://github.com/fivethirtyeight/data/blob/master/fandango/README.md): "every film that has a Rotten Tomatoes rating, a RT User rating, a Metacritic score, a Metacritic User score, and IMDb score, and at least 30 fan reviews on Fandango. The data from Fandango was pulled on Aug. 24, 2015."
+* [2016-2017](https://github.com/mircealex/Movie_ratings_2016_17/blob/master/README.md): "214 of the most popular movies from 2016 and 2017"
+
+This leads me to conclude that the sampling for both datasets was not random as not all movies had an equal chance to be included in the two samples.
+
+## Step 2: Changing the Goal of our Analysis & Isolating the Samples We Need
+
+As a result, the populations of interest needs to be changed to popular movies in 2015 and 2016, which is more representative of the two samples. This analysis will be defining "popular" the same way Hickey defines it in his analysis- 30 fan ratings or more.
+
+I checked each sample separately if they contained popular movies, or movies with over 30 fan ratings on Fandango's website. Checking the 2014-15 sample was straightforward and only required I filter by `Fandango_votes`. 
+
+```{r sample_check}
+fandango_score_before %>%
+  select(Fandango_votes) %>%
+  filter(Fandango_votes < 30)
+```
+
+Checking the 2016-17 sample was not as straightforward as this dataset does not provide information about fan ratings. To quickly check if the sample contains enough popular movies to representative, I randomly sampled 10 movies from the dataset and manually verified the number of user ratings for each movie in the sample. 
+
+```{r sample_check2}
+set.seed(1)
+sample_n(fandango_score_after, size=10)
+```
+
+Movie        | Number of User Ratings
+------------- | -------------
+Hands of Stone| 5,279
+The Bye Bye Man| 7,274
+Our Kind of Traitor| 7,272
+The Autopsy of Jane Done | 12,301
+Dirty Grandpa | 30,295
+Arsenal | 284
+The Light Between Oceans | 13,692
+Exposed | 1,216
+Jason Bourne | 56,869
+Before I Fall | 9,236
+
+Finally, I created two more datasets isolating only the sample points that belong to my populations of interest that exclude movies not released in either 2015 or 2016. 
+
+```{r isolate_2015}
+fandango_2015 <- fandango_score_before %>%
+  separate(FILM, c("Film", "Year"), sep = "\\(") %>%
+  mutate(Year = str_sub(Year, 1, 4)) %>%
+  filter(Year == 2015)
+```
+
+```{r isolate_2016}
+fandango_2016 <- fandango_score_after %>%
+  filter(year == 2016)
+```
+
+## Step 3: Comparing Distribution Shapes for 2015 and 2016
+
+I generated two kernel density plots in one graph to compare each sample's distribution shape. 
+
+```{r kernels}
+ggplot(data=fandango_2015, aes(x=Fandango_Stars)) +
+  geom_density() +
+  geom_density(data=fandango_2016, aes(x=fandango), color = "red") +
+  labs(title = "Kernel Density Plot: Fandango 2015-16", x="Fandango Rating", y="Density")+
+  scale_x_continuous(breaks=seq(0,5, by=0.5), limits = c(0,5))+
+  theme(panel.background=element_rect(fill="white"), axis.line = element_line(size=0.25, colour = "black"), axis.text.x=element_text(size=8), plot.title = element_text(hjust=0.5))
+```
+Both sample's density plots are left-skewed, with most ratings in the sample falling in the higher range of 0 to 5. While their shapes are similar, there is a clear difference between the two- the bulk of ratings in the 2015 sample fall between 4 and 4.5 while the bulk of ratings in the 2016 sample fall between 3.5 and 4. This suggests that movies in 2016 were rated lower compared to 2015. 
+
+## Step 4: Comparing Relative Frequencies
+
+Since the two samples have different numbers of movies, it makes more sense to compare the two samples with relative frequencies, specifically percentages.
+
+```{r freq}
+freq_dist_15 <- fandango_2015 %>%
+  group_by(Fandango_Stars) %>%
+  summarize(Freq=n()) %>% 
+  mutate(Percentage = Freq / nrow(fandango_2015)*100)
+freq_dist_16 <- fandango_2016 %>%
+  group_by(fandango) %>%
+  summarize(Freq=n()) %>%
+  mutate(Percentage = Freq / nrow(fandango_2016)*100)
+freq_dist_15
+freq_dist_16
+```
+From examining the two frequency tables, I can tell that there is a difference between the two distribution, but the direction is not as obvious as it was looking at a visualization. 
+
+## Step 5: Determining the Direction of the Change
+
+Finally, I generated summary statistics, specifically mean, median, and mode (the most frequently occurring value found in a series of numbers), for both samples and plotted them on a graph.
+
+```{r summary}
+mode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+summary_2015 <- fandango_2015 %>%
+  summarize(year = "2015", Mean = mean(Fandango_Stars), Median = median(Fandango_Stars), Mode = mode(Fandango_Stars))
+summary_2016 <- fandango_2016 %>%
+  summarize(year = "2016", Mean = mean(fandango), Median = median(fandango), Mode = mode(fandango))
+```
+
+```{r summary_df}
+summary_df <- bind_rows(summary_2015, summary_2016)
+summary_df <- summary_df %>%
+  gather(key = "statistic", value = "value", - year)
+```
+
+```{r graph}
+ggplot(data=summary_df,
+       aes(x=statistic, y=value, fill=year))+
+  geom_bar(position="dodge", stat="identity")+
+  labs(title="Comparing Summary Statistics: 2015 vs 2016", y="Stars")+
+  theme(panel.background=element_rect(fill="white"), axis.line = element_line(size=0.25, colour = "black"), axis.text.x=element_text(size=8), plot.title = element_text(hjust=0.5))
+```
+
+There is almost no change in median between the 2015 and 2016 samples. However, the 2015 sample mean is slightly higher than the 2016 sample mean; the 2015 sample mode is even higher than the 2016 sample mode. This corresponds with the trend of 2015 sample movies being rated higher than 2016 sample movies. 
+
+# Conclusion
+
+Based on the findings of this analysis, it appears that Fandango fixed the apparent bug that caused teh biased rounding seen in the 2015 sample, as movies in the 2016 sample aren't rated nearly as high.
+
+Thanks to everyone who's been reading so far and stay tuned for more projects!
