@@ -1,0 +1,213 @@
+---
+title: 'Dataquest Guided Project: Mobile App for Lottery Addiction'
+author: "Cindy Zhang"
+date: "1/10/2021"
+output: 
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+  html_document:
+    code_folding: hide
+    number_sections: true
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+---
+
+# Introduction
+
+This is my solution to Dataquest's Guided Project from the third Probability and Statistics course, which involves building the logic behind an app for treating lottery addiction.
+
+More details such as the RMD and csv files can be found in the [repository in GitHub](https://github.com/chundychang/DQ-Rpracticeproject/tree/master/probability_statistics).
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = F, results = 'markup', message = F)
+# knitr::opts_chunk$set(include = F)
+knitr::opts_chunk$set(echo = TRUE)
+options(scientific=T, digits = 3) 
+# options(scipen=9, digits = 3) 
+# ‘scipen’: integer. A penalty to be applied when deciding to print numeric values in fixed or exponential notation.  Positive values bias towards fixed and negative towards scientific notation: fixed notation will be preferred unless it is more than ‘scipen’ digits wider.
+# use scipen=999 to prevent scientific notation at all times
+```
+
+```{r pkg, include=FALSE}
+library(knitr)
+library(pander)
+library(flextable)
+library(magrittr)
+library(dplyr)
+library(purrr)
+library(readr)
+library(tidyverse)
+library(tidyr)
+library(tibble)
+library(rlang)
+library(sets)
+library(DT)
+library(stringr)
+library(ggplot2)
+options(stringsAsFactors = FALSE)
+```
+
+# Setting up the Core Functions
+
+factorial = calculates factorials
+combination = calculates combinations
+
+combination function incorporates factorial function. Combination key for the rest of the project, used to calculate probability.
+
+```{r}
+factorial <- function(n) {
+    final_product <- 1 
+    for (i in 1:n) {
+        final_product <- final_product * i
+    }
+    return(final_product)
+}
+
+combination <- function(n, k) {
+    return(factorial(n)/(factorial(n - k) * factorial(k)))
+}
+```
+
+# Setting up One-ticket Probability Function
+
+Background: in 6/49 lottery, six numbers drawn from a set of 49 numbers, ranged 1 to 49. Winning number must match: {13, 22, 24, 27, 42, 44}.
+
+First version of app calculates probability of winning the big prize with various numbers for a single ticket. First version must include the following details:
+
+* Inside the app, the user inputs six different numbers from 1 to 49.
+
+* Under the hood, the six numbers will come as an R vector, which will serve as the single input to our function.
+
+* The engineering team wants the function to print the probability value in a friendly way — in a way that people without any probability training are able to understand.
+
+```{r}
+one_ticket_probability <- function(x) {
+  c_lotto <- combination(49, 6)
+  probability <- 1/c_lotto
+  actual_prob <- sprintf("%1.9f",probability)
+  statement <- paste("You have a ", actual_prob, "% chance of winning the big prize.", sep = "" )
+  return(statement)
+}
+
+vec <- c(13,22,24,27,42,44)
+one_ticket_probability(vec)
+```
+
+# Historical Data Check for Canada Lottery
+
+Saved Canada Lottery data as a data frame, examined number of rows and columns in data set, printed first and last three rows.
+
+```{r}
+can_data <- data.frame(read_csv("649.csv"))
+nrow(can_data)
+ncol(can_data)
+head(can_data, 3)
+tail(can_data, 3)
+```
+
+There are `r nrow(can_data)` rows and `r ncol(can_data)` columns in the dataset. 
+
+## pmap practice
+
+```{r}
+data1 <- c(1, 3, 5)
+data2 <- c(2, 4, 6)
+data3 <- c(8, 9, 7)
+unnamed_list <- list(data1, data2, data3)
+named_list <- list(first=data1, second=data2, third=data3)
+first_item_sum <- sum(named_list$first[1], named_list$second[1], named_list$third[1])
+averages <- pmap(unnamed_list, function(x,y,z) {(x+y+z)/3})
+first_average <- as.vector(unlist(averages[1]))
+```
+
+## Historical Data Check Function
+
+Users compare their ticket against historical lottery data in Canada. Function contains the following details:
+
+*Inside the app, the user inputs six different numbers from 1 to 49.
+
+*Under the hood, the six numbers will come as an R vector and serve as an input to our function.
+
+*Prints 1) the number of times the combination selected occurred in the Canada data set and 2) the probability of winning the big prize in the next drawing with that combination.
+
+```{r}
+historical_lots <- pmap(
+  list(
+    one <- can_data$NUMBER.DRAWN.1,
+    two <- can_data$NUMBER.DRAWN.2,
+    three <- can_data$NUMBER.DRAWN.3,
+    four <- can_data$NUMBER.DRAWN.4,
+    five <- can_data$NUMBER.DRAWN.5,
+    six <- can_data$NUMBER.DRAWN.6
+  ),
+  .f <- function(one,two,three,four,five,six) { c(one,two,three,four,five,six)}
+)
+```
+
+```{r}
+check_historical_occurrence <- function(lot) {
+  historical_matches <- map(historical_lots, function(x) {setequal(x,lot)})
+  num_past_matches <- sum(unlist(historical_matches))
+  s <- paste("The combination you entered has appeared ", num_past_matches, " times in the past. ", "Your chance of winning the big prize in the next drawing using this combination is ", one_ticket_probability(lot), sep = "")
+  return(s)
+}
+
+check_historical_occurrence(c(3, 12, 11, 14, 41, 43))
+check_historical_occurrence(c(1, 2, 3, 4, 5, 6))
+```
+
+# Multi-ticket Probability
+
+Wrote function that covers purchase of multiple tickets. Allows users to calculate chances of winning for any number of different tickets. Function contains the following details:
+
+*The user will input the number of different tickets they want to play (without inputting the specific combinations they intend to play).
+
+*Our function will see an integer between 1 and 13,983,816 (the maximum number of different tickets).
+
+*The function should print information about the probability of winning the big prize depending on the number of different tickets played.
+
+```{r}
+multi_ticket_probability <- function(n) {
+  total <- combination(49,6)
+  probability <- n/total
+  actual_prob <- sprintf("%1.9f",probability)
+  statement <- paste("After buying ", n, " tickets, you have a ", actual_prob, "% chance of winning the big prize.", sep = "" )
+  return(statement)
+}
+```
+
+```{r}
+multi_ticket_probability(1)
+multi_ticket_probability(10)
+multi_ticket_probability(100)
+multi_ticket_probability(10000)
+multi_ticket_probability(6991908)
+multi_ticket_probability(13983816)
+```
+
+# Less Winning Numbers - Function
+
+Calculates probabilities for smaller prizes with three, four, or five winning numbers. 
+
+```{r}
+probability_less_6 <- function(n) {
+  n_combinations_ticket = combination(6,n)
+  n_combinations_remaining = combination(49-n, 6-n)
+  successful_outcomes = n_combinations_ticket*n_combinations_remaining
+  n_combinations_total = combination(49,6)
+  
+  prob = (successful_outcomes/n_combinations_total)*100
+  actual_prob <- sprintf("%1.9f",prob)
+  statement <- paste("You have a ", actual_prob, "% chance of winning a smaller prize with ", n, " winning numbers.", sep = "" )
+  return(statement)
+}
+```
+
+```{r}
+probability_less_6(3)
+probability_less_6(4)
+probability_less_6(5)
+```
+
