@@ -2,29 +2,134 @@
 title: 'Dataquest Guided Project: New York Solar Resource Data'
 author: "Cindy Zhang"
 date: "1/22/2021"
-output: html_document
+output: 
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+  html_document:
+    code_folding: hide
+    number_sections: true
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
 ---
 
+# Introduction
+
+This is my solution to Dataquest's Guided Project from the APIs in R course, which practices querying APIs in R.
+
+More details such as the RMD and csv files can be found in the [repository in GitHub](https://github.com/chundychang/DQ-Rpracticeproject/tree/master/api_web_scrape). 
+
 ```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = F, results = 'markup', message = F)
+# knitr::opts_chunk$set(include = F)
 knitr::opts_chunk$set(echo = TRUE)
+options(scientific=T, digits = 3) 
+# options(scipen=9, digits = 3) 
+# ‘scipen’: integer. A penalty to be applied when deciding to print numeric values in fixed or exponential notation.  Positive values bias towards fixed and negative towards scientific notation: fixed notation will be preferred unless it is more than ‘scipen’ digits wider.
+# use scipen=999 to prevent scientific notation at all times
 ```
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+```{r pkg, include=FALSE}
+library(knitr)
+library(pander)
+library(httr)
+library(flextable)
+library(magrittr)
+library(dplyr)
+library(purrr)
+library(readr)
+library(tidyverse)
+library(tidyr)
+library(tibble)
+library(rlang)
+library(DT)
+library(stringr)
+library(ggplot2)
+options(stringsAsFactors = FALSE)
 ```
 
-## Including Plots
+# Findings
 
-You can also embed plots, for example:
+## API set up
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+This guided project involves querying the Data Gov API, which requires an access key. Enter your own data key; if you don't have one, you can sign up for one [here] (https://api.data.gov/signup/). 
+
+```{r, echo=FALSE}
+# storing the values
+
+# make sure you hide your API key when publishing with echo=FALSE
+
+key <- #enter your API key here.
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+First, I stored my endpoint of interest and parameters in a variable and a list, respectively. Then I wrote a function to query the Solar data API and executed the function, storing the results.
+
+```{r}
+solar_url <- "/api/solar/solar_resource/v1"
+parameters_list <- (list(format = "json", api_key = key, lat = "41", lon = "-75"))
+
+#api get function
+gov_api_json <- function(endpoint, queries = list()) {
+
+  # Preparing the URL 
+  url <- modify_url("https://developer.nrel.gov", path = endpoint)
+
+  # API requests
+  response <- GET(url, query = queries)
+
+  # Tracking errors
+  if ( http_error(response) ){
+    print(status_code(response))
+    stop("Something went wrong.", call. = FALSE)
+  }
+
+  if (http_type(response) != "application/json") {
+    stop("API did not return json", call. = FALSE)
+  }
+
+  # Extracting content
+  json_text <- content(response, "text")
+
+  # Store content as list
+  json_lists <- jsonlite::fromJSON(json_text)
+  
+  # Return list
+  json_lists
+}
+
+# Execute function
+
+complex_list <- gov_api_json(solar_url, queries = parameters_list)
+str(complex_list)
+
+```
+
+## Create dataframe from complex list
+
+Since `complex_list` is a bunch of nested lists, I converted it into a work-able dataframe. I had to manually re-add the month columns. 
+
+```{r}
+# simplify list- avg_dni
+u_complex_list <- unlist(complex_list$outputs)
+
+# restructure the new list into a matrix
+u_df <- as.data.frame(matrix(u_complex_list, nrow=13))
+
+# remove first row 
+u_df <- u_df[-1,]
+
+# rename columns
+u_df <- u_df %>%
+  rename(
+    avg_dni = V1,
+    avg_ghi = V2,
+    avg_lat_tilt = V3
+  )
+
+# add month column
+u_df <- u_df %>%
+  mutate(month = month.abb) %>%
+  select(month, everything())
+
+```
