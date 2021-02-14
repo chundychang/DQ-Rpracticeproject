@@ -63,15 +63,101 @@ titles <- wp_content %>%
   html_nodes("h3 a") %>%
   html_text()
 years <- wp_content %>%
-  html_nodes("span ")
+  html_nodes(".lister-item-year") %>%
+  html_text()
+
+#convert years from character to numeric
+years <- readr::parse_number(years)
 ```
 
 ## Extracting Movies' Features
 
+```{r}
+runtimes <- wp_content %>%
+  html_nodes(".runtime") %>%
+  html_text()
+genres <- wp_content %>%
+  html_nodes(".genre") %>%
+  html_text()
+
+# Conversion/cleaning
+
+runtimes <- readr::parse_number(runtimes)
+genres <- str_sub(genres, 2, -1)
+genres <- stringr::str_trim(genres)
+```
+
 ## Extracting Movies' Ratings
+
+```{r}
+user_ratings <- wp_content %>%
+  html_nodes("div .ratings-imdb-rating") %>%
+  html_text
+metascores <- wp_content %>%
+  html_nodes(".metascore") %>%
+  html_text()
+
+# Cleaning
+metascores <- readr::parse_number(metascores)
+user_ratings <- str_replace_all(user_ratings, "\n", "")
+user_ratings<- str_trim(user_ratings)
+user_ratings <- readr::parse_number(user_ratings)
+```
 
 ## Extracting Movies' Votes
 
+```{r}
+votes <- wp_content %>%
+  html_nodes(".sort-num_votes-visible") %>%
+  html_text()
+
+# Cleaning
+votes <- str_replace_all(votes, "\n                Votes:\n                ", "")
+votes <- str_replace_all(votes, "\n", "")
+votes <- str_trim(votes)
+votes <- readr::parse_number(votes)
+```
+
 ## Dealing with Missing Values
 
+```{r}
+append_vector <- function(vector, inserted_indices, values){
+
+  ## Creating the current indices of the vector
+  vector_current_indices <- 1:length(vector)
+
+  ## Adding small amount of values (between 0 and 0.9) to the `inserted_indices`
+  new_inserted_indices <- inserted_indices + seq(0, 0.9, length.out = length(inserted_indices))
+
+  ## Appending the `new_inserted_indices` to the current vector indices
+  indices <- c(vector_current_indices, new_inserted_indices)
+
+  ## Ordering the indices
+  ordered_indices <- order(indices)
+
+  ## Appending the new value to the existing vector
+  new_vector <- c(vector, values)
+
+  ## Ordering the new vector wrt the ordered indices
+  new_vector[ordered_indices]
+}
+metascores <- append_vector(metascores, c(1,1,1,13,24), NA)
+titles <- titles[-17]
+years <- years[-17]
+runtimes <- runtimes[-17]
+genres <- genres[-17]
+metascores <- metascores[-17]
+```
+
 ## Visualization
+
+```{r}
+ratings_df <- tibble(titles, years, runtimes, genres, user_ratings, metascores, votes)
+# Round user ratings to integers
+ratings_df <- ratings_df %>%
+  mutate(user_ratings=floor(user_ratings))
+# Visualize
+ggplot(data=ratings_df,
+       aes(x=user_ratings,y=votes,group=user_ratings))+geom_boxplot()
+```
+The lowest- and highest-rated films have the lowest and highest votes, respectively. Linnear correlation between ratings and votes.
