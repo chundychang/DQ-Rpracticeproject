@@ -15,9 +15,9 @@ output:
 ---
 # Introduction
 
-This is my solution to Dataquest's Guided Project from the fifth Probability and Statistics course, which investigates the frequency of Jeopardy topics.
+This is my solution to Dataquest's Guided Project from the second Predictive Modeling and Machine Learning in R course, which builds 
 
-More details such as the RMD and csv files can be found in the [repository in GitHub](https://github.com/chundychang/DQ-Rpracticeproject/tree/master/probability_statistics).
+More details such as the RMD and csv files can be found in the [repository in GitHub](https://github.com/chundychang/DQ-Rpracticeproject/tree/master/machine%20learning).
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(warning = F, results = 'markup', message = F)
