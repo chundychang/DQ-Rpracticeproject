@@ -1,0 +1,12 @@
+\contentsline {section}{Introduction}{1}{section*.2}%
+\contentsline {section}{Findings}{1}{section*.3}%
+\contentsline {subsection}{Exploring the Dataset}{1}{section*.4}%
+\contentsline {subsection}{Training, Cross-validation and Test Sets}{2}{section*.5}%
+\contentsline {subsection}{Data Cleaning}{2}{section*.6}%
+\contentsline {subsection}{Creating the Vocabulary}{2}{section*.7}%
+\contentsline {subsection}{Calculating Constants First}{2}{section*.8}%
+\contentsline {subsection}{Calculating Probability Parameters}{2}{section*.9}%
+\contentsline {subsection}{Classifying a New Message}{2}{section*.10}%
+\contentsline {subsection}{Calculating Accuracy}{2}{section*.11}%
+\contentsline {subsection}{Hyperparameter Tuning and Cross-validation}{2}{section*.12}%
+\contentsline {subsection}{Test Set Performance}{2}{section*.13}%

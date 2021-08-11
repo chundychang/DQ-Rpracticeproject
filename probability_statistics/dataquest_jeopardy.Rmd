@@ -1,0 +1,209 @@
+---
+title: 'Dataquest Guided Project: Winning Jeopardy'
+author: "Cindy Zhang"
+date: "4/5/2021"
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+  html_document:
+    code_folding: hide
+    number_sections: true
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+---
+
+# Introduction
+
+This is my solution to Dataquest's Guided Project from the fifth Probability and Statistics course, which investigates the frequency of Jeopardy topics.
+
+More details such as the RMD and csv files can be found in the [repository in GitHub](https://github.com/chundychang/DQ-Rpracticeproject/tree/master/probability_statistics).
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = F, results = 'markup', message = F)
+# knitr::opts_chunk$set(include = F)
+knitr::opts_chunk$set(echo = TRUE)
+options(scientific=T, digits = 3) 
+# options(scipen=9, digits = 3) 
+# ‘scipen’: integer. A penalty to be applied when deciding to print numeric values in fixed or exponential notation.  Positive values bias towards fixed and negative towards scientific notation: fixed notation will be preferred unless it is more than ‘scipen’ digits wider.
+# use scipen=999 to prevent scientific notation at all times
+```
+
+```{r pkg, include=FALSE}
+library(knitr)
+library(pander)
+library(httr)
+library(flextable)
+library(magrittr)
+library(dplyr)
+library(purrr)
+library(readr)
+library(tidyverse)
+library(tidyr)
+library(tibble)
+library(rlang)
+library(DT)
+library(stringr)
+library(ggplot2)
+library(rvest)
+options(stringsAsFactors = FALSE)
+```
+
+# Findings
+
+## Getting to Know Jeopardy Data
+
+```{r}
+jeopardy <- data.frame(read_csv("jeopardy.csv"))
+
+# Print out rows and column names
+head(jeopardy, n=5)
+colnames(jeopardy)
+
+# Clean column names
+jeopardy_newcols <- colnames(jeopardy)
+jeopardy_newcols <- tolower(jeopardy_newcols)
+names(jeopardy) <- jeopardy_newcols
+```
+
+## Fixing Data Types
+
+```{r}
+# Remove "None" values from "Value" column
+jeopardy_clean <- jeopardy %>%
+  filter(value !="None")%>% 
+  mutate(
+    value = str_replace_all(value, "[$,]", ""),
+    value = as.numeric(value)
+  )
+
+```
+
+## Normalizing Text
+
+```{r}
+jeopardy_clean <- jeopardy_clean %>%
+  mutate(
+    question = tolower(question),
+    question = str_replace_all(question, "[^A-Za-z0-9]", ""),
+    answer = tolower(answer),
+    answer = str_replace_all(answer, "[^A-Za-z0-9 ]", ""),
+    category = tolower(category),
+    category = str_replace_all(category, "[^A-Za-z0-9 ]", "")
+  )
+```
+
+## Making Dates More Accessible
+```{r}
+jeopardy_clean <- jeopardy_clean %>%
+  separate(., air.date, into = c("year", "month", "day"), sep = "-") %>%
+  mutate(
+    year= as.numeric(year),
+    month = as.numeric(month),
+    day = as.numeric(day)
+  )
+```
+
+## Focusing On Particular Subject Areas
+
+```{r}
+n_questions <- nrow(jeopardy)
+p_category_expected <-   1/3369 
+p_not_category_expected <- 3368/3369 
+p_expected <- c(p_category_expected, p_not_category_expected)
+
+categories <- pull(jeopardy_clean, category)
+
+#Science count and chisq
+n_science_categories = 0
+
+for (c in categories) {
+  if ("science" %in% c) {
+    n_science_categories <- n_science_categories + 1
+  }
+}
+
+science_obs <- c(n_science_categories, n_questions - n_science_categories)
+p_expected <- c(1/3369, 3368/3369)
+chisq.test(science_obs, p = p_expected)
+
+#history count and chisq
+n_history_categories = 0
+
+for (c in categories) {
+  if ("history" %in% c) {
+    n_history_categories <- n_history_categories + 1
+  }
+}
+
+history_obs <- c(n_history_categories, n_questions - n_history_categories)
+p_expected <- c(1/3369, 3368/3369)
+chisq.test(history_obs, p = p_expected)
+
+#Shakespeare count and chisq
+n_shakespeare_categories = 0
+
+for (c in categories) {
+  if ("shakespeare" %in% c) {
+    n_shakespeare_categories <- n_shakespeare_categories + 1
+  }
+}
+
+shakespeare_obs <- c(n_shakespeare_categories, n_questions - n_shakespeare_categories)
+p_expected <- c(1/3369, 3368/3369)
+chisq.test(shakespeare_obs, p = p_expected)
+
+
+```
+We see p-values less than 0.05 for each of the hypothesis tests. From this, we would conclude that we should reject the null hypothesis that science doesn't have a higher prevalence than other topics in the Jeopardy data. We would conclude the same with history and Shakespeare.
+
+## Unique Terms In Questions
+
+```{r}
+#Pull questions
+questions <- pull(jeopardy, question)
+terms_used <- character(0)
+
+for (q in questions) {
+  # Split the sentence into distinct words
+  split_sentence = str_split(q, " ")[[1]]
+  # Check if each word is longer than 6 and if currently in terms_used
+  for (term in split_sentence) {
+    if (!term %in% terms_used & nchar(term) >=6) {
+      terms_used=c(terms_used, term)
+    }
+  }
+}
+
+```
+
+## Terms in Low and High Value 
+
+```{r}
+values <- pull(jeopardy, value)
+values_count_data <- NULL
+
+for (term in terms_used){
+  n_high_value = 0
+  n_low_value = 0
+  
+  for (i in 1:length(questions)) {
+    # Split sentence into a new vector
+    split_sentence = str_split(questions[i], " ")[[1]]
+    
+    # Detect if term is in the question and value status
+    if (term %in% split_sentence & values[i] >= 800) {
+      n_high_value = n_high_value + 1
+    } else if (term %in% split_sentence & values[i] < 800) {
+      n_low_value = n_low_value + 1
+    }
+  }
+  # Testing if the counts for high and low value questions deviates from expected
+  test = chisq.test(c(n_high_value, n_low_value), p = c(2/5,3/5))
+  new_row = c(term, n_high_value, n_low_value, test$p.value)
+  
+  #append new row
+  values_count_data=rbind(values_count_data, new_row)
+}
+```
