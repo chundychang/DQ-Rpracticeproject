@@ -12,7 +12,7 @@ library(shiny)
 library(readr)
 library(tidyverse)
 library(DT)
-heart <- read.csv("D:/User/Documents/GitHub/DQ-Rpracticeproject/shiny/M549_init/www/heart.csv")
+heart <- read.csv("www/heart.csv")
 colnames(heart)
 str(heart)
 
